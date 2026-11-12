@@ -54,7 +54,7 @@ android {
                 val storeFilePath = props.getProperty("storeFile")
 
                 if (!storeFilePath.isNullOrBlank()) {
-                    storeFile = file(storeFilePath)
+                    storeFile = rootProject.file(storeFilePath)
                 }
             }
         }
