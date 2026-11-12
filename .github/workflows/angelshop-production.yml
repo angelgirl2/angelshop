@@ -211,6 +211,7 @@ jobs:
       - name: Build Android release APK with diagnostic stacktrace
         env:
           WORKER_URL: ${{ steps.verify.outputs.worker_url }}
+          ANGELSHOP_CI_DEBUG_SIGNING: "true"
         run: flutter build apk --release --dart-define=API_URL="$WORKER_URL" --verbose
 
       - name: Upload Android APK
