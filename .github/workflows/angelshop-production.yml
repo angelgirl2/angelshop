@@ -187,10 +187,30 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
 
-      - name: Build Android release APK
+      - name: Package complete source for local development
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          zip -qr dist/angelshop-source.zip . \
+            -x ".git/*" ".dart_tool/*" "build/*" "android/.gradle/*" \
+               "android/local.properties" "android/key.properties" \
+               "*.jks" "*.keystore" "*.p12" ".env" ".env.*" \
+               "worker/wrangler.deploy.toml" "dist/*"
+
+      - name: Upload complete source archive
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: angelshop-source
+          path: dist/angelshop-source.zip
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Build Android release APK with diagnostic stacktrace
         env:
           WORKER_URL: ${{ steps.verify.outputs.worker_url }}
-        run: flutter build apk --release --android-skip-build-dependency-validation --dart-define=API_URL="$WORKER_URL"
+        run: flutter build apk --release --android-skip-build-dependency-validation --dart-define=API_URL="$WORKER_URL" --verbose
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
