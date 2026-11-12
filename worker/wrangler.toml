@@ -1,0 +1,7 @@
+name = "angel-shop"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "DB"
+id = "PASTE_KV_NAMESPACE_ID_HERE"
