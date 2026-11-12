@@ -1,5 +1,9 @@
 import java.util.Properties
 
+val releaseKeystoreFile = rootProject.file("key.properties")
+val useReleaseSigning = releaseKeystoreFile.exists() &&
+    System.getenv("ANGELSHOP_CI_DEBUG_SIGNING") != "true"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -38,9 +42,9 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("key.properties")
+            val keystorePropertiesFile = releaseKeystoreFile
 
-            if (keystorePropertiesFile.exists()) {
+            if (useReleaseSigning) {
                 val props = Properties()
 
                 keystorePropertiesFile.inputStream().use {
@@ -62,7 +66,7 @@ android {
 
     buildTypes {
         getByName("release") {
-            signingConfig = if (rootProject.file("key.properties").exists())
+            signingConfig = if (useReleaseSigning)
                 signingConfigs.getByName("release")
             else
                 signingConfigs.getByName("debug")
