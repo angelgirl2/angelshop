@@ -166,11 +166,23 @@ jobs:
           echo "worker_url=$WORKER_URL" >> "$GITHUB_OUTPUT"
           echo "Worker deployment and /products health check succeeded."
 
+      - name: Set up Java 17 for Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Configure Flutter to use Java 17
+        shell: bash
+        run: |
+          flutter config --jdk-dir="$JAVA_HOME"
+          java -version
 
       - name: Get Flutter dependencies
         run: flutter pub get
