@@ -1,0 +1,189 @@
+name: Angel Shop Production
+
+on:
+  push:
+    branches:
+      - production-ready
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: angel-shop-production
+  cancel-in-progress: false
+
+jobs:
+  deploy-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      ADMIN_CHAT_ID: ${{ secrets.ADMIN_CHAT_ID }}
+
+    steps:
+      - name: Checkout production branch
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BOT_TOKEN ADMIN_CHAT_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error title=Missing GitHub Secret::The repository secret '$name' is missing or empty."
+              exit 1
+            fi
+          done
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Provision KV and seed catalog without overwriting data
+        id: kv
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/storage/kv/namespaces"
+          AUTH=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          TITLE="angel-shop-DB"
+
+          LIST="$(curl --fail-with-body --silent --show-error "${API}?per_page=100" "${AUTH[@]}")"
+          echo "$LIST" | jq -e '.success == true' >/dev/null
+
+          KV_ID="$(echo "$LIST" | jq -r --arg title "$TITLE" '.result[]? | select(.title == $title) | .id' | head -n 1)"
+
+          if [ -z "$KV_ID" ]; then
+            CREATED="$(curl --fail-with-body --silent --show-error --request POST "$API" "${AUTH[@]}" --data "$(jq -n --arg title "$TITLE" '{title:$title}')")"
+            echo "$CREATED" | jq -e '.success == true' >/dev/null
+            KV_ID="$(echo "$CREATED" | jq -er '.result.id')"
+            echo "Created the dedicated KV namespace."
+          else
+            echo "Reusing the existing dedicated KV namespace."
+          fi
+
+          if ! [[ "$KV_ID" =~ ^[a-fA-F0-9]{32}$ ]]; then
+            echo "::error::Cloudflare returned an invalid KV namespace ID."
+            exit 1
+          fi
+
+          VALUE_URL="$API/$KV_ID/values/products"
+          STATUS="$(curl --silent --show-error --output "$RUNNER_TEMP/angelshop-products-check" --write-out '%{http_code}' --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" "$VALUE_URL")"
+
+          if [ "$STATUS" = "404" ]; then
+            curl --fail-with-body --silent --show-error --request PUT "$VALUE_URL" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data-binary @worker/products.json >/dev/null
+            echo "Seeded the initial product catalog."
+          elif [ "$STATUS" = "200" ]; then
+            echo "Existing product catalog preserved; no product data was overwritten."
+          else
+            echo "::error::Could not inspect the existing products key (HTTP $STATUS)."
+            exit 1
+          fi
+
+          echo "namespace_id=$KV_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare deployment-only Wrangler config and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          KV_ID="${{ steps.kv.outputs.namespace_id }}"
+          sed "s/PASTE_KV_NAMESPACE_ID_HERE/$KV_ID/" worker/wrangler.toml > worker/wrangler.deploy.toml
+          if grep -q 'PASTE_KV_NAMESPACE_ID_HERE' worker/wrangler.deploy.toml; then
+            echo "::error::KV namespace ID was not inserted into the temporary config."
+            exit 1
+          fi
+
+          WEBHOOK_SECRET="$(node -e "const c=require('node:crypto');process.stdout.write(c.createHmac('sha256',process.env.BOT_TOKEN).update('angelshop-bale-webhook:'+process.env.CLOUDFLARE_ACCOUNT_ID).digest('hex'))")"
+          export WEBHOOK_SECRET
+
+          node - "$RUNNER_TEMP/angelshop-secrets.json" <<'NODE'
+          const fs = require("node:fs");
+          const [file] = process.argv.slice(2);
+          const names = ["BOT_TOKEN", "ADMIN_CHAT_ID", "WEBHOOK_SECRET"];
+          const secrets = {};
+          for (const name of names) {
+            const value = process.env[name];
+            if (!value) throw new Error("Missing required secret: " + name);
+            secrets[name] = value;
+          }
+          fs.writeFileSync(file, JSON.stringify(secrets), { mode: 0o600 });
+          NODE
+
+      - name: Deploy Cloudflare Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config worker/wrangler.deploy.toml \
+            --secrets-file "$RUNNER_TEMP/angelshop-secrets.json"
+
+      - name: Configure Bale webhook and verify Worker API
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SUBDOMAIN_RESPONSE="$(curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/subdomain")"
+          echo "$SUBDOMAIN_RESPONSE" | jq -e '.success == true' >/dev/null
+          SUBDOMAIN="$(echo "$SUBDOMAIN_RESPONSE" | jq -er '.result.subdomain')"
+          WORKER_URL="https://angel-shop.${SUBDOMAIN}.workers.dev"
+
+          WEBHOOK_SECRET="$(node -e "const c=require('node:crypto');process.stdout.write(c.createHmac('sha256',process.env.BOT_TOKEN).update('angelshop-bale-webhook:'+process.env.CLOUDFLARE_ACCOUNT_ID).digest('hex'))")"
+          WEBHOOK_URL="${WORKER_URL}/bale/${WEBHOOK_SECRET}"
+
+          BALE_RESPONSE="$(curl --fail-with-body --silent --show-error --request POST \
+            "https://tapi.bale.ai/bot${BOT_TOKEN}/setWebhook" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -n --arg url "$WEBHOOK_URL" '{url:$url}')")"
+          echo "$BALE_RESPONSE" | jq -e '.ok == true' >/dev/null
+
+          VERIFIED=false
+          for attempt in 1 2 3 4 5 6 7 8; do
+            STATUS="$(curl --silent --show-error --output "$RUNNER_TEMP/angelshop-products-response.json" \
+              --write-out '%{http_code}' "${WORKER_URL}/products" || true)"
+            if [ "$STATUS" = "200" ] && jq -e 'type == "array"' "$RUNNER_TEMP/angelshop-products-response.json" >/dev/null; then
+              VERIFIED=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [ "$VERIFIED" != "true" ]; then
+            echo "::error::Worker was deployed, but GET /products did not return a JSON array."
+            exit 1
+          fi
+
+          echo "worker_url=$WORKER_URL" >> "$GITHUB_OUTPUT"
+          echo "Worker deployment and /products health check succeeded."
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Android release APK
+        env:
+          WORKER_URL: ${{ steps.verify.outputs.worker_url }}
+        run: flutter build apk --release --dart-define=API_URL="$WORKER_URL"
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: angel-shop-android
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
