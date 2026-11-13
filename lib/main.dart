@@ -733,7 +733,6 @@ class _CartPageState extends State<CartPage> {
         if (store.discountAmount > 0) _invoiceLine('تخفیف', money(store.discountAmount)),
         const Divider(), _invoiceLine('قابل پرداخت', money(store.cartFinalTotal), strong: true),
         const SizedBox(height: 10), SizedBox(width: double.infinity, child: FilledButton(onPressed: submitting ? null : () async {
-          final messenger = ScaffoldMessenger.of(context);
           setState(() => submitting = true);
           final ok = await store.submit();
           if (!mounted) return;
