@@ -331,49 +331,95 @@ class ProductGrid extends StatelessWidget {
   const ProductGrid(this.list, {super.key});
   @override
   Widget build(BuildContext context) {
-    if (list.isEmpty) return const Center(child: Text('محصولی موجود نیست'));
+    if (list.isEmpty) {
+      return const Center(child: Text('محصولی موجود نیست'));
+    }
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(14, 8, 14, 100),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
-        childAspectRatio: .66,
+        mainAxisSpacing: 13,
+        crossAxisSpacing: 13,
+        childAspectRatio: .64,
       ),
       itemCount: list.length,
       itemBuilder: (_, n) {
         final p = list[n];
         return InkWell(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(22),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => ProductPage(p.id)),
           ),
-          child: glass(
-            padding: const EdgeInsets.all(8),
-            child: grayed(
-              !p.inStock,
-              Column(
+          child: grayed(
+            !p.inStock,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF38204F), Color(0xFF21132F), Color(0xFF17101F)],
+                ),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withValues(alpha: .13)),
+                boxShadow: [
+                  BoxShadow(color: Colors.purpleAccent.withValues(alpha: .10), blurRadius: 18, offset: const Offset(0, 7)),
+                  BoxShadow(color: Colors.black.withValues(alpha: .22), blurRadius: 16, offset: const Offset(0, 5)),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: productImage(p),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: productImage(p),
+                        ),
+                        Positioned(
+                          top: 7,
+                          right: 7,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                            decoration: BoxDecoration(color: const Color(0xCC1A1027), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.white24)),
+                            child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                              Icon(Icons.auto_awesome, size: 11, color: Color(0xFFE4C2FF)),
+                              SizedBox(width: 4),
+                              Text('ANGEL', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: .8)),
+                            ]),
+                          ),
+                        ),
+                        if (!p.inStock)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(color: Colors.black.withValues(alpha: .35), borderRadius: BorderRadius.circular(16)),
+                              child: const Center(child: Text('ناموجود', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    p.name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  priceText(p),
+                  const SizedBox(height: 9),
+                  Text(p.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.35)),
+                  const SizedBox(height: 4),
+                  priceText(p, size: 12),
+                  const SizedBox(height: 5),
                   SizedBox(
                     width: double.infinity,
-                    child: FilledButton.tonal(
-                      onPressed: p.inStock ? () { store.add(p); AngelNotice.show(context, 'محصول به سبد خرید اضافه شد'); } : null,
-                      child: Text(p.inStock ? 'افزودن به سبد' : 'ناموجود'),
+                    height: 38,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 5), visualDensity: VisualDensity.compact),
+                      onPressed: p.inStock
+                          ? () { store.add(p); AngelNotice.show(context, 'محصول به سبد خرید اضافه شد'); }
+                          : null,
+                      child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(Icons.add_shopping_cart_rounded, size: 16),
+                        SizedBox(width: 5),
+                        Text('افزودن به سبد', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      ]),
                     ),
                   ),
                 ],
@@ -514,39 +560,60 @@ class CategoriesPage extends StatelessWidget {
     if (cs.isEmpty) {
       return const Center(child: Text('در حال دریافت دسته‌بندی‌ها...'));
     }
-    return GridView.count(
+    return GridView.builder(
       padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      children: cs
-          .map(
-            (c) => InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => CategoryPage(c)),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 13,
+        crossAxisSpacing: 13,
+        childAspectRatio: 1.03,
+      ),
+      itemCount: cs.length,
+      itemBuilder: (context, index) {
+        final category = cs[index];
+        final count = store.products.where((p) => p.category == category).length;
+        return InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CategoryPage(category))),
+          child: Container(
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topRight,
+                end: Alignment.bottomLeft,
+                colors: index.isEven
+                    ? const [Color(0xFF5C2D82), Color(0xFF28183A), Color(0xFF1A1225)]
+                    : const [Color(0xFF45246A), Color(0xFF21142F), Color(0xFF19111F)],
               ),
-              child: glass(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      catIcon(c),
-                      size: 46,
-                      color: Colors.purpleAccent.shade100,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      c,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-              ),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white.withValues(alpha: .14)),
+              boxShadow: [BoxShadow(color: Colors.purpleAccent.withValues(alpha: .12), blurRadius: 20, offset: const Offset(0, 8))],
             ),
-          )
-          .toList(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Icon(catIcon(category), size: 29, color: const Color(0xFFE5C5FF)),
+                ),
+                const Spacer(),
+                Text(category, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, height: 1.35)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Expanded(child: Text('$count محصول', style: const TextStyle(color: Colors.white60, fontSize: 11))),
+                  const Icon(Icons.arrow_back_rounded, size: 17, color: Color(0xFFDDB8FF)),
+                ]),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
