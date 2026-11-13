@@ -1,0 +1,45 @@
+name: Package Angel Shop local source ZIP
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "worker/**"
+      - "android/**"
+      - "assets/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/source-zip.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source revision
+        uses: actions/checkout@v4
+
+      - name: Create clean local-build source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/package"
+          zip -q -r "$RUNNER_TEMP/package/Angel-Shop-Local-Source.zip" . \
+            -x "./.git/*" "./.git" \
+               "./build/*" "./.dart_tool/*" "./.packages" \
+               "./android/.gradle/*" "./android/local.properties" \
+               "./android/key.properties" "./android/keystore/*" "./android/keystore" \
+               "./.idea/*" "./*.iml"
+          unzip -t "$RUNNER_TEMP/package/Angel-Shop-Local-Source.zip"
+
+      - name: Upload source ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: angel-shop-local-source
+          path: "${{ runner.temp }}/package/Angel-Shop-Local-Source.zip"
+          if-no-files-found: error
+          retention-days: 14
