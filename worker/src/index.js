@@ -51,6 +51,18 @@ export default {
     const path = url.pathname;
     const post = req.method === 'POST';
     try {
+      // Public diagnostics and API landing page must run before customer authentication.
+      if (req.method === 'GET' && (path === '/' || path === '/health')) {
+        let database = 'connected';
+        try { await env.DB.get('products'); } catch (_) { database = 'error'; }
+        const healthy = database === 'connected';
+        return json({
+          ok: healthy,
+          service: 'angel-shop',
+          database,
+          message: path === '/' ? 'Angel Shop API is running. Use /health to check service status.' : undefined,
+        }, healthy ? 200 : 503);
+      }
       if (post && path === `/bale/${env.WEBHOOK_SECRET}`) { await handleBale(await req.json(), env); return json({ ok: true }); }
       if (path === '/live' && req.headers.get('Upgrade') === 'websocket' && env.LIVE) return env.LIVE.get(env.LIVE.idFromName('angel-shop-global')).fetch(req);
       if (path === '/manage' && req.method === 'GET') return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
