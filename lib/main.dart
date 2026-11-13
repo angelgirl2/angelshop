@@ -586,7 +586,7 @@ class _CartPageState extends State<CartPage> {
     final error = await store.applyDiscount(discount.text.trim());
     if (mounted) {
       setState(() => checking = false);
-      AngelNotice.show(context, error ?? 'کد تخفیف اعمال شد');;
+      AngelNotice.show(context, error ?? 'کد تخفیف اعمال شد');
     }
   }
 
@@ -674,7 +674,7 @@ class _CartPageState extends State<CartPage> {
           if (ok && store.lastOrderInfo != null) {
             _showInvoice(store.lastOrderInfo!);
           } else {
-            messenger.showSnackBar(SnackBar(content: Text(store.lastError ?? 'ارسال ناموفق بود، دوباره تلاش کنید')));
+            AngelNotice.show(context, store.lastError ?? 'ارسال ناموفق بود، دوباره تلاش کنید', error: true);
           }
         }, child: submitting ? const CircularProgressIndicator() : const Text('ثبت سفارش'))),
       ]))),
@@ -776,10 +776,10 @@ class _SupportPageState extends State<SupportPage> {
     try {
       final data = await store.createSupportTicket(selectedSubject, message.text.trim());
       if (!mounted) return;
-      AngelNotice.show(context, 'تیکت ${data['ticket']['id']} ثبت شد');;
+      AngelNotice.show(context, 'تیکت ${data['ticket']['id']} ثبت شد');
       setState(_load);
       Navigator.push(context, MaterialPageRoute(builder: (_) => SupportChatPage(ticket: Map<String, dynamic>.from(data['ticket'])))).then((_) { if (mounted) setState(_load); });
-    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; }
+    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true); }
   }
   @override
   Widget build(BuildContext context) {
@@ -846,7 +846,7 @@ class _SupportChatPageState extends State<SupportChatPage> {
       final uploaded = await store.uploadSupportFile(file.name, mime, bytes);
       final data = await store.sendSupportMessage('${widget.ticket['id']}', '', attachments: [uploaded]);
       if (mounted) setState(() => messages = List<Map>.from(data['messages'] ?? messages));
-    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; }
+    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true); }
     finally { if (mounted) setState(() => busy = false); }
   }
   Future<void> _openAttachment(Map file) async {
@@ -857,13 +857,13 @@ class _SupportChatPageState extends State<SupportChatPage> {
       final path = '${dir.path}/$safeName';
       await File(path).writeAsBytes(bytes, flush: true);
       await OpenFilex.open(path);
-    } catch (e) { if (mounted) AngelNotice.show(context, 'باز کردن فایل ممکن نشد: $e', error: true);; }
+    } catch (e) { if (mounted) AngelNotice.show(context, 'باز کردن فایل ممکن نشد: $e', error: true); }
   }
   Future<void> _send() async {
     final value = input.text.trim(); if (value.isEmpty || busy || ticketStatus == 'closed') return;
     setState(() => busy = true); input.clear();
     try { final d = await store.sendSupportMessage('${widget.ticket['id']}', value); if (mounted) setState(() => messages = List<Map>.from(d['messages'] ?? messages)); }
-    catch (e) { if (mounted) { input.text = value; AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; } }
+    catch (e) { if (mounted) { input.text = value; AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true); } }
     finally { if (mounted) setState(() => busy = false); }
   }
   @override
