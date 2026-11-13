@@ -66,7 +66,7 @@ export default {
       if (post && path === `/bale/${env.WEBHOOK_SECRET}`) { await handleBale(await req.json(), env); return json({ ok: true }); }
       if (path === '/live' && req.headers.get('Upgrade') === 'websocket' && env.LIVE) return env.LIVE.get(env.LIVE.idFromName('angel-shop-global')).fetch(req);
       if (path === '/manage' && req.method === 'GET') return new Response(ADMIN_HTML, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
-      if (post && path === '/admin/login') return await adminLogin(await req.json(), env);
+      if (post && path === '/admin/login') return await adminLogin(await req.json(), env, req);
       if (path.startsWith('/admin/') && !path.startsWith('/admin/catalog/')) {
         const admin = await adminAuth(req, env);
         if (!admin) return json({ error: 'دسترسی مدیر معتبر نیست' }, 401);
@@ -262,14 +262,23 @@ async function createOrder(body, env, me) {
 }
 
 // ---------- پنل مدیریت مخفی ----------
-async function adminLogin(body, env) {
+async function adminLogin(body, env, request) {
   const password = String(body.password || '');
+  const ip = String(request?.headers.get('CF-Connecting-IP') || 'unknown');
+  const ipHash = hex(await crypto.subtle.digest('SHA-256', enc.encode(ip)));
+  const failKey = 'admin:login-fail:' + ipHash;
+  const attempts = Number(await env.DB.get(failKey) || 0);
+  if (attempts >= 5) return json({ error: 'تلاش ناموفق بیش از حد؛ ۱۵ دقیقه بعد دوباره امتحان کنید.' }, 429);
   const saved = await env.DB.get('admin:password', 'json');
   let valid = false;
   if (saved?.salt && saved?.hash) valid = (await hashPw(password, saved.salt)) === saved.hash;
-  else if (String(env.ADMIN_PANEL_PASSWORD || '').length >= 12) valid = password === env.ADMIN_PANEL_PASSWORD;
-  else return json({ error: 'برای راه‌اندازی اولیه، رمز پنل را در تنظیمات محرمانه سرویس با نام ADMIN_PANEL_PASSWORD قرار دهید.' }, 503);
-  if (!valid) return json({ error: 'رمز عبور نادرست است' }, 401);
+  else if (String(env.ADMIN_PANEL_PASSWORD || '').length >= 4 && String(env.ADMIN_PANEL_PASSWORD || '').length <= 128) valid = password === env.ADMIN_PANEL_PASSWORD;
+  else return json({ error: 'برای راه‌اندازی اولیه، رمز پنل را در تنظیمات محرمانه سرویس با نام ADMIN_PANEL_PASSWORD و حداقل ۴ نویسه قرار دهید.' }, 503);
+  if (!valid) {
+    await env.DB.put(failKey, String(attempts + 1), { expirationTtl: 900 });
+    return json({ error: 'رمز عبور نادرست است' }, 401);
+  }
+  await env.DB.delete(failKey);
   const token = hex(crypto.getRandomValues(new Uint8Array(32)));
   await env.DB.put('admin:session:' + token, '1', { expirationTtl: 60 * 60 * 8 });
   return json({ ok: true, token });
