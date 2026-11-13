@@ -1,0 +1,15 @@
+name = "angelshop-api-production"
+main = "src/index.js"
+compatibility_date = "2026-11-12"
+workers_dev = true
+
+[vars]
+# Flutter Android/Desktop clients do not send browser Origin headers.
+# Set this to a comma-separated list of exact origins only if Flutter Web is enabled.
+CORS_ORIGIN = ""
+
+[triggers]
+crons = ["17 * * * *"]
+
+# The deployment script creates a new D1 database and appends its binding here.
+# Never point this Worker at the legacy KV namespace.

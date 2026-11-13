@@ -5,3 +5,14 @@ compatibility_date = "2025-01-01"
 [[kv_namespaces]]
 binding = "DB"
 id = "PASTE_KV_NAMESPACE_ID_HERE"
+
+[ai]
+binding = "AI"
+
+[[durable_objects.bindings]]
+name = "LIVE"
+class_name = "LiveHub"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveHub"]
