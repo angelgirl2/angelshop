@@ -30,7 +30,7 @@ function jalaliToGregorian(jy, jm, jd) {
 const enc = new TextEncoder();
 const hex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
 const kvJson = async (env, k, d) => JSON.parse((await env.DB.get(k)) || d);
-const notifyLive = async (env, type = 'changed') => { try { if (env.LIVE) { const payload = { type, at: Date.now() }; if (type === 'products') payload.products = (await getProducts(env)).filter(p => p.active !== false); await env.LIVE.get(env.LIVE.idFromName('angel-shop-global')).fetch('https://live/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } } catch (_) {} };
+const notifyLive = async (env, type = 'changed') => { try { if (env.LIVE) { const payload = { type, at: Date.now() }; if (type === 'products') payload.products = (await getProducts(env)).filter(p => p.active !== false); if (type === 'banners') payload.banners = await getBanners(env, true); await env.LIVE.get(env.LIVE.idFromName('angel-shop-global')).fetch('https://live/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } } catch (_) {} };
 
 // قیمت/موجودی/توضیحات: کاتالوگ از گیت‌هاب + تغییرات ربات (overrides) روی آن
 const getProducts = async env => {
@@ -86,6 +86,11 @@ export default {
         if (path === '/admin/settings' && !post) return json(await getAdminSettings(env));
         if (path === '/admin/settings' && post) return await saveAdminSettings(await req.json(), env);
         if (path === '/admin/product-image' && post) return await adminUploadProductImage(await req.json(), env);
+        if (path === '/admin/banners' && !post) return json(await getBanners(env));
+        if (path === '/admin/banners' && post) return await adminSaveBanner(await req.json(), env);
+        const bannerDelete = path.match(new RegExp('^/admin/banners/([A-Z0-9-]+)$'));
+        if (bannerDelete && req.method === 'DELETE') return await adminDeleteBanner(env, bannerDelete[1]);
+        if (path === '/admin/banner-image' && post) return await adminUploadBannerImage(await req.json(), env);
         if (path === '/admin/tickets' && !post) return json(await adminTickets(env));
         const adminMessages = path.match(/^\/admin\/tickets\/([A-Z0-9-]+)\/messages$/);
         if (adminMessages && !post) return json((await env.DB.get('support:messages:' + adminMessages[1], 'json')) || []);
@@ -106,6 +111,9 @@ export default {
         await env.DB.put('products', JSON.stringify(arr));
         return json({ ok: true, count: arr.length });
       }
+      if (path === '/banners' && req.method === 'GET') return json(await getBanners(env, true));
+      const bannerImageMatch = path.match(new RegExp('^/banner-images/([A-Z0-9-]+)$'));
+      if (bannerImageMatch && req.method === 'GET') return await serveBannerImage(env, bannerImageMatch[1]);
       const imageMatch = path.match(/^\/product-images\/([0-9A-Za-z_-]+)$/);
       if (imageMatch && req.method === 'GET') return await serveProductImage(env, imageMatch[1]);
       if (path === '/products') return json((await getProducts(env)).filter(p => p.active !== false));
@@ -402,6 +410,75 @@ async function serveProductImage(env, id) {
   if (!item?.data) return new Response('Not found', { status: 404 });
   const bytes = Uint8Array.from(atob(item.data), c => c.charCodeAt(0));
   return new Response(bytes, { headers: { 'Content-Type': item.mime, 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } });
+}
+async function getBanners(env, activeOnly = false) {
+  const list = await kvJson(env, 'banners', '[]');
+  const safe = (Array.isArray(list) ? list : []).filter(x => x && typeof x === 'object');
+  return safe
+    .filter(x => !activeOnly || x.active === true)
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || Number(a.createdAt || 0) - Number(b.createdAt || 0));
+}
+async function adminSaveBanner(body, env) {
+  const id = String(body.id || '').trim();
+  const title = String(body.title || '').trim().slice(0, 90);
+  const subtitle = String(body.subtitle || '').trim().slice(0, 180);
+  const placement = String(body.placement || 'home');
+  const targetId = String(body.targetId || '').trim();
+  const sortOrder = Math.max(0, Math.min(9999, Math.floor(Number(body.sortOrder || 0))));
+  if (title.length < 2) return json({ error: 'عنوان بنر باید حداقل ۲ نویسه باشد' }, 400);
+  if (!['home', 'category', 'product'].includes(placement)) return json({ error: 'جایگاه بنر نامعتبر است' }, 400);
+  if (placement === 'category' && !(await getCategories(env)).includes(targetId)) return json({ error: 'دسته‌بندی انتخاب‌شده پیدا نشد' }, 400);
+  if (placement === 'product' && !(await getProducts(env)).some(p => p.id === targetId)) return json({ error: 'محصول انتخاب‌شده پیدا نشد' }, 400);
+  const list = await getBanners(env);
+  const old = id ? list.find(x => x.id === id) : null;
+  if (id && !old) return json({ error: 'بنر پیدا نشد' }, 404);
+  const item = {
+    id: old?.id || newId('BNR'),
+    title,
+    subtitle,
+    placement,
+    targetId: placement === 'home' ? '' : targetId,
+    image: old?.image || '',
+    active: body.active !== false,
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : 0,
+    createdAt: old?.createdAt || Date.now(),
+    updatedAt: Date.now(),
+  };
+  const next = old ? list.map(x => x.id === item.id ? item : x) : [...list, item];
+  await env.DB.put('banners', JSON.stringify(next));
+  await notifyLive(env, 'banners');
+  return json(item);
+}
+async function adminDeleteBanner(env, id) {
+  const list = await getBanners(env);
+  if (!list.some(x => x.id === id)) return json({ error: 'بنر پیدا نشد' }, 404);
+  await env.DB.put('banners', JSON.stringify(list.filter(x => x.id !== id)));
+  await env.DB.delete('banner:image:' + id);
+  await notifyLive(env, 'banners');
+  return json({ ok: true });
+}
+async function adminUploadBannerImage(body, env) {
+  const id = String(body.id || '').trim();
+  const data = String(body.data || '').replace(/^data:[^,]+,/, '');
+  const mime = String(body.mime || '').toLowerCase();
+  if (!/^[A-Z0-9-]{8,80}$/.test(id) || !['image/jpeg','image/png','image/webp','image/gif'].includes(mime) || !/^[A-Za-z0-9+/]*={0,2}$/.test(data)) return json({ error: 'تصویر یا شناسه بنر نامعتبر است' }, 400);
+  const size = Math.floor(data.length * 3 / 4) - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0);
+  if (!size || size > 1_500_000) return json({ error: 'حجم تصویر باید کمتر از ۱.۵ مگابایت باشد' }, 413);
+  const list = await getBanners(env);
+  const index = list.findIndex(x => x.id === id);
+  if (index < 0) return json({ error: 'ابتدا اطلاعات بنر را ذخیره کنید' }, 404);
+  await env.DB.put('banner:image:' + id, JSON.stringify({ mime, data, updatedAt: Date.now() }));
+  list[index].image = '/banner-images/' + id + '?v=' + Date.now();
+  list[index].updatedAt = Date.now();
+  await env.DB.put('banners', JSON.stringify(list));
+  await notifyLive(env, 'banners');
+  return json({ ok: true, image: list[index].image });
+}
+async function serveBannerImage(env, id) {
+  const item = await env.DB.get('banner:image:' + id, 'json');
+  if (!item?.data) return new Response('Not found', { status: 404 });
+  const bytes = Uint8Array.from(atob(item.data), c => c.charCodeAt(0));
+  return new Response(bytes, { headers: { 'Content-Type': item.mime, 'Content-Length': String(bytes.byteLength), 'Cache-Control': 'public, max-age=300', 'X-Content-Type-Options': 'nosniff' } });
 }
 async function adminChangePassword(body, env) {
   const password = String(body.password || '');

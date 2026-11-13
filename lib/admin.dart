@@ -145,7 +145,7 @@ class AdminPanelPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final api = AdminApi(token);
-    return DefaultTabController(length: 6, child: Container(decoration: const BoxDecoration(gradient: _adminGradient),
+    return DefaultTabController(length: 7, child: Container(decoration: const BoxDecoration(gradient: _adminGradient),
       child: Scaffold(backgroundColor: Colors.transparent,
         appBar: AppBar(
           backgroundColor: const Color(0xFF160D23).withValues(alpha: .92),
@@ -155,12 +155,13 @@ class AdminPanelPage extends StatelessWidget {
             Tab(icon: Icon(Icons.inventory_2_outlined), text: 'محصولات'),
             Tab(icon: Icon(Icons.receipt_long_rounded), text: 'سفارش‌ها'),
             Tab(icon: Icon(Icons.category_outlined), text: 'دسته‌ها'),
+            Tab(icon: Icon(Icons.campaign_outlined), text: 'بنرها'),
             Tab(icon: Icon(Icons.discount_outlined), text: 'تخفیف‌ها'),
             Tab(icon: Icon(Icons.support_agent_rounded), text: 'پشتیبانی'),
             Tab(icon: Icon(Icons.settings_outlined), text: 'تنظیمات'),
           ]),
         ),
-        body: TabBarView(children: [AdminProductsPage(api: api), AdminOrdersPage(api: api), AdminCategoriesPage(api: api), AdminDiscountsPage(api: api), AdminTicketsPage(api: api), AdminSettingsPage(api: api)]),
+        body: TabBarView(children: [AdminProductsPage(api: api), AdminOrdersPage(api: api), AdminCategoriesPage(api: api), AdminBannersPage(api: api), AdminDiscountsPage(api: api), AdminTicketsPage(api: api), AdminSettingsPage(api: api)]),
       ),
     ));
   }
@@ -294,6 +295,286 @@ class _ProductEditorState extends State<_ProductEditor> {
   );
 }
 
+class AdminBannersPage extends StatefulWidget {
+  const AdminBannersPage({super.key, required this.api});
+  final AdminApi api;
+  @override
+  State<AdminBannersPage> createState() => _AdminBannersPageState();
+}
+
+class _AdminBannersPageState extends State<AdminBannersPage> {
+  List<Map<String, dynamic>> banners = [];
+  List<String> categories = [];
+  List<Map<String, dynamic>> products = [];
+  bool loading = true;
+
+  Future<void> load() async {
+    try {
+      final values = await Future.wait([
+        widget.api.call('/admin/banners'),
+        widget.api.call('/admin/categories'),
+        widget.api.call('/admin/products'),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        banners = (values[0] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+        categories = (values[1] as List).map((e) => e.toString()).toList();
+        products = (values[2] as List).map((e) => Map<String, dynamic>.from(e)).toList();
+        loading = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => loading = false);
+        AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+      }
+    }
+  }
+
+  Future<void> edit([Map<String, dynamic>? banner]) async {
+    final form = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _BannerEditor(banner: banner, categories: categories, products: products),
+    );
+    if (form == null) return;
+    try {
+      final imageData = form.remove('imageData');
+      final mime = form.remove('mime');
+      final saved = Map<String, dynamic>.from(await widget.api.call('/admin/banners', method: 'POST', body: form));
+      if (imageData is String && imageData.isNotEmpty) {
+        await widget.api.call('/admin/banner-image', method: 'POST', body: {'id': saved['id'], 'mime': mime, 'data': imageData});
+      }
+      if (mounted) {
+        AngelNotice.show(context, 'بنر ذخیره شد و در جایگاه انتخاب‌شده نمایش داده می‌شود');
+        await load();
+      }
+    } catch (e) {
+      if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
+  Future<void> removeBanner(String id) async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف بنر'),
+        content: const Text('این بنر و تصویر تبلیغاتی آن حذف می‌شود.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('انصراف')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('حذف بنر')),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    try {
+      await widget.api.call('/admin/banners/' + id, method: 'DELETE');
+      await load();
+      if (mounted) AngelNotice.show(context, 'بنر حذف شد');
+    } catch (e) {
+      if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
+  Future<void> toggle(Map<String, dynamic> banner, bool active) async {
+    try {
+      await widget.api.call('/admin/banners', method: 'POST', body: {...banner, 'active': active});
+      await load();
+    } catch (e) {
+      if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    }
+  }
+
+  String placementText(Map<String, dynamic> b) {
+    final place = b['placement'];
+    if (place == 'category') return 'صفحه دسته‌بندی: ${b['targetId']}';
+    if (place == 'product') {
+      final matches = products.where((x) => x['id'].toString() == b['targetId'].toString()).toList();
+      final productName = matches.isEmpty ? b['targetId'] : (matches.first['name'] ?? b['targetId']);
+      return 'صفحه محصول: $productName';
+    }
+    return 'صفحه اصلی فروشگاه';
+  }
+
+  @override
+  void initState() { super.initState(); load(); }
+
+  @override
+  Widget build(BuildContext context) => Column(children: [
+    Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+      child: Row(children: [
+        const Expanded(child: Text('تبلیغات و بنرهای فروشگاه', style: TextStyle(fontWeight: FontWeight.bold))),
+        IconButton.filledTonal(onPressed: load, icon: const Icon(Icons.refresh)),
+        const SizedBox(width: 6),
+        FilledButton.icon(onPressed: () => edit(), icon: const Icon(Icons.add_photo_alternate_outlined), label: const Text('بنر جدید')),
+      ]),
+    ),
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+      child: Text('هر بنر را می‌توانی در صفحه اصلی، بالای یک دسته‌بندی مشخص یا داخل صفحه یک محصول خاص قرار بدهی.', style: TextStyle(color: Colors.white60, fontSize: 11, height: 1.5)),
+    ),
+    Expanded(
+      child: loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: load,
+              child: banners.isEmpty
+                  ? ListView(children: const [SizedBox(height: 125), Center(child: Text('هنوز بنری ثبت نشده است')), Center(child: Text('برای شروع، گزینه «بنر جدید» را بزنید', style: TextStyle(color: Colors.white60, fontSize: 12)))])
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 20),
+                      itemCount: banners.length,
+                      itemBuilder: (_, index) {
+                        final b = banners[index];
+                        final image = b['image']?.toString() ?? '';
+                        final active = b['active'] != false;
+                        final url = image.startsWith('http') ? image : Cfg.api + image;
+                        return _adminCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Row(children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(width: 82, height: 62, child: image.isEmpty ? const Icon(Icons.image_not_supported) : Image.network(url, fit: BoxFit.cover, errorBuilder: (_, _, _) => const Icon(Icons.broken_image_outlined))),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(b['title']?.toString() ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              if ((b['subtitle']?.toString() ?? '').isNotEmpty) Text(b['subtitle'].toString(), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                              const SizedBox(height: 4),
+                              Text(placementText(b), style: const TextStyle(color: Color(0xFFE0B9FF), fontSize: 11)),
+                            ])),
+                          ]),
+                          const Divider(color: Colors.white12, height: 20),
+                          Row(children: [
+                            Expanded(child: Text(active ? 'فعال · در فروشگاه نمایش داده می‌شود' : 'غیرفعال · مخفی از فروشگاه', style: TextStyle(fontSize: 11, color: active ? Colors.greenAccent : Colors.white54))),
+                            Switch(value: active, onChanged: (v) => toggle(b, v)),
+                            IconButton(tooltip: 'ویرایش بنر', onPressed: () => edit(b), icon: const Icon(Icons.edit_outlined)),
+                            IconButton(tooltip: 'حذف بنر', onPressed: () => removeBanner(b['id'].toString()), icon: const Icon(Icons.delete_outline, color: Colors.redAccent)),
+                          ]),
+                        ]));
+                      },
+                    ),
+            ),
+    ),
+  ]);
+}
+
+class _BannerEditor extends StatefulWidget {
+  const _BannerEditor({required this.categories, required this.products, this.banner});
+  final List<String> categories;
+  final List<Map<String, dynamic>> products;
+  final Map<String, dynamic>? banner;
+  @override
+  State<_BannerEditor> createState() => _BannerEditorState();
+}
+
+class _BannerEditorState extends State<_BannerEditor> {
+  late final TextEditingController title, subtitle, order;
+  late String placement, targetId;
+  bool active = true, picking = false;
+  String? imageData, mime;
+  @override
+  void initState() {
+    super.initState();
+    final b = widget.banner ?? {};
+    title = TextEditingController(text: b['title']?.toString() ?? '');
+    subtitle = TextEditingController(text: b['subtitle']?.toString() ?? '');
+    order = TextEditingController(text: (b['sortOrder'] ?? 0).toString());
+    placement = ['home', 'category', 'product'].contains(b['placement']) ? b['placement'].toString() : 'home';
+    targetId = b['targetId']?.toString() ?? '';
+    active = b['active'] != false;
+  }
+  @override
+  void dispose() { title.dispose(); subtitle.dispose(); order.dispose(); super.dispose(); }
+
+  Future<void> pickImage() async {
+    setState(() => picking = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) throw Exception('خواندن تصویر ممکن نشد');
+      if (bytes.length > 1500000) throw Exception('حجم تصویر باید کمتر از ۱.۵ مگابایت باشد');
+      final ext = file.extension?.toLowerCase() ?? '';
+      mime = ext == 'png' ? 'image/png' : ext == 'webp' ? 'image/webp' : ext == 'gif' ? 'image/gif' : 'image/jpeg';
+      imageData = base64Encode(bytes);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);
+    } finally {
+      if (mounted) setState(() => picking = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final oldImage = widget.banner?['image']?.toString() ?? '';
+    final categoryValue = widget.categories.contains(targetId) ? targetId : null;
+    final productExists = widget.products.any((p) => p['id'].toString() == targetId);
+    return AlertDialog(
+      title: Text(widget.banner == null ? 'ساخت بنر تبلیغاتی' : 'ویرایش بنر'),
+      content: SizedBox(width: 470, child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        TextField(controller: title, decoration: _adminInput('عنوان بنر')) ,
+        const SizedBox(height: 9),
+        TextField(controller: subtitle, decoration: _adminInput('متن کوتاه روی بنر (اختیاری)')),
+        const SizedBox(height: 9),
+        DropdownButtonFormField<String>(
+          value: placement,
+          decoration: _adminInput('محل نمایش بنر'),
+          items: const [
+            DropdownMenuItem(value: 'home', child: Text('صفحه اصلی فروشگاه')),
+            DropdownMenuItem(value: 'category', child: Text('صفحه یک دسته‌بندی مشخص')),
+            DropdownMenuItem(value: 'product', child: Text('صفحه یک محصول خاص')),
+          ],
+          onChanged: (v) => setState(() { placement = v ?? 'home'; targetId = ''; }),
+        ),
+        if (placement == 'category') ...[
+          const SizedBox(height: 9),
+          DropdownButtonFormField<String>(
+            value: categoryValue,
+            decoration: _adminInput('انتخاب دسته‌بندی'),
+            items: widget.categories.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))).toList(),
+            onChanged: (v) => setState(() => targetId = v ?? ''),
+          ),
+        ],
+        if (placement == 'product') ...[
+          const SizedBox(height: 9),
+          DropdownButtonFormField<String>(
+            value: productExists ? targetId : null,
+            decoration: _adminInput('انتخاب محصول'),
+            items: widget.products.map((p) => DropdownMenuItem(value: p['id'].toString(), child: Text(p['name']?.toString() ?? p['id'].toString(), overflow: TextOverflow.ellipsis))).toList(),
+            onChanged: (v) => setState(() => targetId = v ?? ''),
+          ),
+        ],
+        const SizedBox(height: 9),
+        TextField(controller: order, keyboardType: TextInputType.number, decoration: _adminInput('ترتیب نمایش (عدد کمتر = زودتر)')),
+        const SizedBox(height: 9),
+        SwitchListTile(contentPadding: EdgeInsets.zero, value: active, onChanged: (v) => setState(() => active = v), title: const Text('فعال‌بودن بنر')),
+        if (imageData == null && oldImage.isNotEmpty) Padding(padding: const EdgeInsets.only(bottom: 8), child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network(oldImage.startsWith('http') ? oldImage : Cfg.api + oldImage, height: 90, width: double.infinity, fit: BoxFit.cover, errorBuilder: (_, _, _) => const SizedBox(height: 50, child: Center(child: Text('تصویر فعلی بنر')))))),
+        OutlinedButton.icon(onPressed: picking ? null : pickImage, icon: const Icon(Icons.image_outlined), label: Text(picking ? 'در حال خواندن تصویر...' : imageData == null ? (oldImage.isEmpty ? 'انتخاب تصویر بنر' : 'تعویض تصویر بنر') : 'تصویر جدید انتخاب شد')),
+        const Text('تصویر PNG، JPG، WEBP یا GIF · حداکثر ۱.۵ مگابایت', style: TextStyle(fontSize: 10, color: Colors.white60)),
+      ]))),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('انصراف')),
+        FilledButton(onPressed: () {
+          if (title.text.trim().length < 2) { AngelNotice.show(context, 'عنوان بنر را وارد کنید', error: true); return; }
+          if (placement != 'home' && targetId.isEmpty) { AngelNotice.show(context, 'محل هدف بنر را انتخاب کنید', error: true); return; }
+          if (widget.banner == null && imageData == null) { AngelNotice.show(context, 'برای بنر جدید تصویر انتخاب کنید', error: true); return; }
+          final sort = int.tryParse(order.text.trim()) ?? 0;
+          Navigator.pop(context, <String, dynamic>{
+            if (widget.banner != null) 'id': widget.banner!['id'],
+            'title': title.text.trim(),
+            'subtitle': subtitle.text.trim(),
+            'placement': placement,
+            'targetId': placement == 'home' ? '' : targetId,
+            'sortOrder': sort,
+            'active': active,
+            'imageData': imageData,
+            'mime': mime,
+          });
+        }, child: const Text('ذخیره بنر')),
+      ],
+    );
+  }
+}
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key, required this.api});
   final AdminApi api;

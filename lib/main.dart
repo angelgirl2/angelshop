@@ -326,6 +326,62 @@ Widget productImage(Product p, {double? height}) {
   );
 }
 
+class BannerStrip extends StatelessWidget {
+  const BannerStrip({super.key, required this.banners, this.height = 126});
+  final List<ShopBanner> banners;
+  final double height;
+  @override
+  Widget build(BuildContext context) {
+    if (banners.isEmpty) return const SizedBox.shrink();
+    final width = MediaQuery.sizeOf(context).width - 28;
+    return SizedBox(
+      height: height,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        itemCount: banners.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final banner = banners[index];
+          final path = banner.image.startsWith('http') ? banner.image : '${Cfg.api}${banner.image}';
+          return Container(
+            width: width,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: .22)),
+              boxShadow: [BoxShadow(color: Colors.purpleAccent.withValues(alpha: .15), blurRadius: 18, offset: const Offset(0, 6))],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(fit: StackFit.expand, children: [
+                Image.network(path, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(decoration: const BoxDecoration(gradient: bg), child: const Icon(Icons.campaign_outlined, size: 38, color: Colors.white70))),
+                const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.centerRight, end: Alignment.centerLeft, colors: [Color(0xD90F0719), Color(0x880F0719), Color(0x080F0719)]))),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: width * .72),
+                      child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Container(padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4), decoration: BoxDecoration(color: const Color(0xAA8E44AD), borderRadius: BorderRadius.circular(20)), child: const Text('پیشنهاد ویژه', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
+                        const SizedBox(height: 7),
+                        Text(banner.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: Colors.white, height: 1.3)),
+                        if (banner.subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(banner.subtitle, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white70, height: 1.4)),
+                        ],
+                      ]),
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 class ProductGrid extends StatelessWidget {
   final List<Product> list;
   const ProductGrid(this.list, {super.key});
@@ -448,6 +504,7 @@ class ProductPage extends StatelessWidget {
             return const Center(child: Text('این محصول دیگر موجود نیست'));
           }
           final p = store.products[i];
+          final productBanners = store.banners.where((b) => b.placement == 'product' && b.targetId == p.id).toList();
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -458,6 +515,10 @@ class ProductPage extends StatelessWidget {
                   productImage(p, height: 280),
                 ),
               ),
+              if (productBanners.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                BannerStrip(banners: productBanners, height: 118),
+              ],
               const SizedBox(height: 16),
               Text(
                 p.name,
@@ -516,6 +577,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final list = store.products.where((p) => p.name.contains(q)).toList();
+    final homeBanners = store.banners.where((b) => b.placement == 'home').toList();
     return Column(
       children: [
         Padding(
@@ -546,6 +608,11 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        if (homeBanners.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          BannerStrip(banners: homeBanners, height: 132),
+          const SizedBox(height: 10),
+        ],
         Expanded(child: ProductGrid(list)),
       ],
     );
@@ -628,9 +695,17 @@ class CategoryPage extends StatelessWidget {
       appBar: AppBar(title: Text(cat), backgroundColor: Colors.transparent),
       body: ListenableBuilder(
         listenable: store,
-        builder: (_, _) => ProductGrid(
-          store.products.where((p) => p.category == cat).toList(),
-        ),
+        builder: (_, _) {
+          final ads = store.banners.where((b) => b.placement == 'category' && b.targetId == cat).toList();
+          return Column(children: [
+            if (ads.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              BannerStrip(banners: ads, height: 116),
+              const SizedBox(height: 8),
+            ],
+            Expanded(child: ProductGrid(store.products.where((p) => p.category == cat).toList())),
+          ]);
+        },
       ),
     ),
   );

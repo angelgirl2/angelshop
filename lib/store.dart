@@ -52,6 +52,31 @@ class Product {
   );
 }
 
+class ShopBanner {
+  final String id, title, subtitle, placement, targetId, image;
+  final bool active;
+  final int sortOrder;
+  const ShopBanner({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.placement,
+    required this.targetId,
+    required this.image,
+    required this.active,
+    required this.sortOrder,
+  });
+  factory ShopBanner.fromJson(Map<String, dynamic> j) => ShopBanner(
+    id: '${j['id'] ?? ''}',
+    title: '${j['title'] ?? ''}',
+    subtitle: '${j['subtitle'] ?? ''}',
+    placement: '${j['placement'] ?? 'home'}',
+    targetId: '${j['targetId'] ?? ''}',
+    image: '${j['image'] ?? ''}',
+    active: j['active'] != false,
+    sortOrder: int.tryParse('${j['sortOrder'] ?? 0}') ?? 0,
+  );
+}
 class Order {
   final String code, date, status; // pending | approved | rejected
   final List<Map> items;
@@ -68,6 +93,7 @@ class Order {
 
 class Store extends ChangeNotifier {
   List<Product> products = [];
+  List<ShopBanner> banners = [];
   List<Order> orders = [];
   final Map<String, int> cart = {};
   String? token, userName, userPhone, lastError;
@@ -102,6 +128,8 @@ class Store extends ChangeNotifier {
     userPhone = p.getString('phone');
     final cached = p.getString('products');
     if (cached != null) _setProducts(jsonDecode(cached));
+    final cachedBanners = p.getString('banners');
+    if (cachedBanners != null) _setBanners(List.from(jsonDecode(cachedBanners)));
     notifyListeners();
     await refresh();
     _connectLive();
@@ -127,6 +155,12 @@ class Store extends ChangeNotifier {
               _setProducts(List.from(data['products']));
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('products', jsonEncode(data['products']));
+              notifyListeners();
+            }
+            if (data['banners'] is List) {
+              _setBanners(List.from(data['banners']));
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setString('banners', jsonEncode(data['banners']));
               notifyListeners();
             }
             if (data['type'] == 'orders' || data['type'] == 'tickets')
@@ -156,6 +190,14 @@ class Store extends ChangeNotifier {
     cart.removeWhere((id, _) => !products.any((p) => p.id == id && p.inStock));
   }
 
+  void _setBanners(List<dynamic> items) {
+    banners = items
+        .map((e) => ShopBanner.fromJson(Map<String, dynamic>.from(e)))
+        .where((b) => b.active && b.image.isNotEmpty)
+        .toList()
+      ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+  }
+
   Future<void> refresh() async {
     try {
       final r = await http
@@ -168,6 +210,14 @@ class Store extends ChangeNotifier {
           utf8.decode(r.bodyBytes),
         );
       }
+      try {
+        final br = await http.get(_u('/banners')).timeout(const Duration(seconds: 15));
+        if (br.statusCode == 200) {
+          final values = List<dynamic>.from(_body(br));
+          _setBanners(values);
+          await (await SharedPreferences.getInstance()).setString('banners', jsonEncode(values));
+        }
+      } catch (_) {}
       if (token != null) {
         final o = await http
             .get(_u('/orders'), headers: _h)
