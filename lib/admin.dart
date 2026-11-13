@@ -72,27 +72,71 @@ class _AdminLoginPageState extends State<AdminLoginPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Container(
-    decoration: const BoxDecoration(gradient: _adminGradient),
-    child: Scaffold(backgroundColor: Colors.transparent, appBar: AppBar(backgroundColor: Colors.transparent, title: const Text('ورود مدیریت')),
-      body: Center(child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 430),
-        child: _adminCard(Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.admin_panel_settings_rounded, size: 66, color: Color(0xFFE1B8FF)),
-          const SizedBox(height: 12),
-          const Text('ANGEL SHOP', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 2)),
-          const SizedBox(height: 5),
-          const Text('ورود امن مدیر فروشگاه', style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 22),
-          TextField(controller: password, obscureText: hide, textDirection: TextDirection.ltr, onSubmitted: (_) => login(), decoration: _adminInput('رمز پنل مدیریت').copyWith(prefixIcon: const Icon(Icons.lock_outline), suffixIcon: IconButton(icon: Icon(hide ? Icons.visibility : Icons.visibility_off), onPressed: () => setState(() => hide = !hide)))),
-          if (error != null) Padding(padding: const EdgeInsets.only(top: 12), child: Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFFFA8B8)))),
-          const SizedBox(height: 18),
-          SizedBox(width: double.infinity, height: 50, child: FilledButton.icon(onPressed: busy ? null : login, icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.login_rounded), label: Text(busy ? 'در حال بررسی...' : 'ورود به پنل'))),
-          const SizedBox(height: 8),
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('بازگشت به فروشگاه')),
-        ])),
-      )),
-    ),
-  );
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(gradient: _adminGradient),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          title: const Text('ورود مدیریت'),
+        ),
+        body: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 430),
+              child: _adminCard(
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.admin_panel_settings_rounded, size: 66, color: Color(0xFFE1B8FF)),
+                    const SizedBox(height: 12),
+                    const Text('ANGEL SHOP', style: TextStyle(fontSize: 23, fontWeight: FontWeight.w900, letterSpacing: 2)),
+                    const SizedBox(height: 5),
+                    const Text('ورود امن مدیر فروشگاه', style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: password,
+                      obscureText: hide,
+                      textDirection: TextDirection.ltr,
+                      onSubmitted: (_) => login(),
+                      decoration: _adminInput('رمز پنل مدیریت').copyWith(
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          icon: Icon(hide ? Icons.visibility : Icons.visibility_off),
+                          onPressed: () => setState(() => hide = !hide),
+                        ),
+                      ),
+                    ),
+                    if (error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(error!, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xFFFFA8B8))),
+                      ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: FilledButton.icon(
+                        onPressed: busy ? null : login,
+                        icon: busy
+                            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            : const Icon(Icons.login_rounded),
+                        label: Text(busy ? 'در حال بررسی...' : 'ورود به پنل'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(onPressed: () => Navigator.pop(context), child: const Text('بازگشت به فروشگاه')),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class AdminPanelPage extends StatelessWidget {
