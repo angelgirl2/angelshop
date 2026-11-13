@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +12,7 @@ class Cfg {
   // در گیت‌هاب از طریق --dart-define=API_URL تنظیم می‌شود
   static const api = String.fromEnvironment(
     'API_URL',
-    defaultValue: 'https://angel-shop.YOUR_SUBDOMAIN.workers.dev',
+    defaultValue: 'https://angel-shop.angelgirl2-bigsister-1383200784.workers.dev',
   );
   static const rubika = 'https://rubika.ir/angelgirlbrand';
   static const telegram = 'https://t.me/angelgirlbrand';
@@ -139,7 +140,7 @@ class Store extends ChangeNotifier {
           .timeout(const Duration(seconds: 15));
       if (r.statusCode == 200) {
         _setProducts(_body(r));
-        (await SharedPreferences.getInstance()).setString(
+        await (await SharedPreferences.getInstance()).setString(
           'products',
           utf8.decode(r.bodyBytes),
         );
@@ -181,9 +182,9 @@ class Store extends ChangeNotifier {
       userName = j['user']['name'];
       userPhone = j['user']['phone'];
       final p = await SharedPreferences.getInstance();
-      p.setString('token', token!);
-      p.setString('name', userName!);
-      p.setString('phone', userPhone!);
+      await p.setString('token', token!);
+      await p.setString('name', userName!);
+      await p.setString('phone', userPhone!);
       orders = [];
       cart.clear();
       notifyListeners();
@@ -209,7 +210,7 @@ class Store extends ChangeNotifier {
     cart.clear();
     final p = await SharedPreferences.getInstance();
     for (final k in ['token', 'name', 'phone']) {
-      p.remove(k);
+      await p.remove(k);
     }
     notifyListeners();
   }
