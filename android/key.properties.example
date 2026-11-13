@@ -1,0 +1,5 @@
+# Copy to android/key.properties and fill using your own release keystore.
+storePassword=REPLACE_ME
+keyPassword=REPLACE_ME
+keyAlias=angelshop
+storeFile=keystore/angelshop.jks
