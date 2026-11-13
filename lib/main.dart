@@ -11,6 +11,8 @@ import 'package:flutter/material.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'store.dart';
+import 'angel_notice.dart';
+import 'admin.dart';
 
 // ===================== تنظیمات (این بخش را پر کنید) =====================
 const bg = LinearGradient(
@@ -71,9 +73,15 @@ class AngelApp extends StatelessWidget {
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       brightness: Brightness.dark,
-      colorSchemeSeed: const Color(0xFF9C27B0),
+      colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFB45BEA), brightness: Brightness.dark, primary: const Color(0xFFD2A1FF), secondary: const Color(0xFF9E67E8), surface: const Color(0xFF1C1029)),
       useMaterial3: true,
       scaffoldBackgroundColor: Colors.transparent,
+      canvasColor: const Color(0xFF1B1027),
+      snackBarTheme: SnackBarThemeData(behavior: SnackBarBehavior.floating, backgroundColor: const Color(0xFF311B46), contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white24)), insetPadding: const EdgeInsets.fromLTRB(14, 0, 14, 18)),
+      appBarTheme: const AppBarTheme(foregroundColor: Colors.white, surfaceTintColor: Colors.transparent, elevation: 0),
+      filledButtonTheme: FilledButtonThemeData(style: FilledButton.styleFrom(backgroundColor: const Color(0xFF9147C2), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)))),
+      inputDecorationTheme: const InputDecorationTheme(filled: true, fillColor: Colors.white10, border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(16)), borderSide: BorderSide.none)),
+      dialogTheme: DialogThemeData(backgroundColor: const Color(0xFF241532), surfaceTintColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22))),
     ),
     builder: (c, w) =>
         Directionality(textDirection: TextDirection.rtl, child: w!),
@@ -92,7 +100,7 @@ class _SplashState extends State<Splash> {
   void initState() {
     super.initState();
     Future.wait([
-      Future.delayed(const Duration(milliseconds: 2800)),
+      Future.delayed(const Duration(milliseconds: 1900)),
       store.ready,
     ]).then((_) {
       if (mounted) {
@@ -112,21 +120,26 @@ class _SplashState extends State<Splash> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const AppLogo(size: 130, glow: true),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: .82, end: 1),
+              duration: const Duration(milliseconds: 1050),
+              curve: Curves.easeOutBack,
+              builder: (_, scale, child) => Transform.scale(scale: scale, child: child),
+              child: const AppLogo(size: 130, glow: true),
+            ),
             const SizedBox(height: 24),
             const Text(
               'Angel shop',
               style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'angelgirlbrand',
-              style: TextStyle(
-                fontSize: 16,
-                letterSpacing: 3,
-                color: Colors.white70,
-              ),
-            ),
+            const Text('angelgirlbrand', style: TextStyle(fontSize: 12, letterSpacing: 3, color: Colors.white70)),
+            const SizedBox(height: 34),
+            const SizedBox(width: 190, child: LinearProgressIndicator(minHeight: 3, borderRadius: BorderRadius.all(Radius.circular(8)), backgroundColor: Colors.white12, color: Color(0xFFE0B8FF))),
+            const SizedBox(height: 17),
+            const SizedBox(width: 38, height: 38, child: CircularProgressIndicator(strokeWidth: 3, color: Color(0xFFE5C4FF))),
+            const SizedBox(height: 12),
+            const Text('در حال بارگذاری...', style: TextStyle(color: Colors.white70, fontSize: 13, letterSpacing: .3)),
           ],
         ),
       ),
@@ -359,7 +372,7 @@ class ProductGrid extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton.tonal(
-                      onPressed: p.inStock ? () => store.add(p) : null,
+                      onPressed: p.inStock ? () { store.add(p); AngelNotice.show(context, 'محصول به سبد خرید اضافه شد'); } : null,
                       child: Text(p.inStock ? 'افزودن به سبد' : 'ناموجود'),
                     ),
                   ),
@@ -433,9 +446,7 @@ class ProductPage extends StatelessWidget {
                 onPressed: p.inStock
                     ? () {
                         store.add(p);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('به سبد اضافه شد')),
-                        );
+                        AngelNotice.show(context, 'محصول به سبد خرید اضافه شد');
                       }
                     : null,
                 child: Text(p.inStock ? 'افزودن به سبد' : 'اتمام موجودی'),
@@ -461,6 +472,18 @@ class _HomePageState extends State<HomePage> {
     final list = store.products.where((p) => p.name.contains(q)).toList();
     return Column(
       children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(children: [
+            HiddenAdminLogo(size: 38),
+            const SizedBox(width: 10),
+            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Angel Shop', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, letterSpacing: .3)),
+              Text('انتخابی متفاوت، خریدی آسان', style: TextStyle(color: Colors.white60, fontSize: 11)),
+            ])),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7), decoration: BoxDecoration(color: Colors.white.withValues(alpha: .09), borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white12)), child: const Row(children: [Icon(Icons.auto_awesome, size: 15, color: Color(0xFFE3B8FF)), SizedBox(width: 5), Text('2027', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold))])),
+          ]),
+        ),
         Padding(
           padding: const EdgeInsets.all(14),
           child: TextField(
@@ -563,7 +586,7 @@ class _CartPageState extends State<CartPage> {
     final error = await store.applyDiscount(discount.text.trim());
     if (mounted) {
       setState(() => checking = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error ?? 'کد تخفیف اعمال شد')));
+      AngelNotice.show(context, error ?? 'کد تخفیف اعمال شد');;
     }
   }
 
@@ -753,10 +776,10 @@ class _SupportPageState extends State<SupportPage> {
     try {
       final data = await store.createSupportTicket(selectedSubject, message.text.trim());
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تیکت ${data['ticket']['id']} ثبت شد')));
+      AngelNotice.show(context, 'تیکت ${data['ticket']['id']} ثبت شد');;
       setState(_load);
       Navigator.push(context, MaterialPageRoute(builder: (_) => SupportChatPage(ticket: Map<String, dynamic>.from(data['ticket'])))).then((_) { if (mounted) setState(_load); });
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; }
   }
   @override
   Widget build(BuildContext context) {
@@ -823,7 +846,7 @@ class _SupportChatPageState extends State<SupportChatPage> {
       final uploaded = await store.uploadSupportFile(file.name, mime, bytes);
       final data = await store.sendSupportMessage('${widget.ticket['id']}', '', attachments: [uploaded]);
       if (mounted) setState(() => messages = List<Map>.from(data['messages'] ?? messages));
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); }
+    } catch (e) { if (mounted) AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; }
     finally { if (mounted) setState(() => busy = false); }
   }
   Future<void> _openAttachment(Map file) async {
@@ -834,17 +857,42 @@ class _SupportChatPageState extends State<SupportChatPage> {
       final path = '${dir.path}/$safeName';
       await File(path).writeAsBytes(bytes, flush: true);
       await OpenFilex.open(path);
-    } catch (e) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('باز کردن فایل ممکن نشد: $e'))); }
+    } catch (e) { if (mounted) AngelNotice.show(context, 'باز کردن فایل ممکن نشد: $e', error: true);; }
   }
   Future<void> _send() async {
     final value = input.text.trim(); if (value.isEmpty || busy || ticketStatus == 'closed') return;
     setState(() => busy = true); input.clear();
     try { final d = await store.sendSupportMessage('${widget.ticket['id']}', value); if (mounted) setState(() => messages = List<Map>.from(d['messages'] ?? messages)); }
-    catch (e) { if (mounted) { input.text = value; ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')))); } }
+    catch (e) { if (mounted) { input.text = value; AngelNotice.show(context, e.toString().replaceFirst('Exception: ', ''), error: true);; } }
     finally { if (mounted) setState(() => busy = false); }
   }
   @override
   Widget build(BuildContext context) => Container(decoration: const BoxDecoration(gradient: bg), child: Scaffold(backgroundColor: Colors.transparent, appBar: AppBar(backgroundColor: Colors.transparent, title: Text('${widget.ticket['subject'] ?? 'گفت‌وگو'}'), actions: [Padding(padding: const EdgeInsets.all(12), child: Center(child: Text('${widget.ticket['id']}', style: const TextStyle(fontSize: 10))))]), body: Column(children: [Expanded(child: RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.all(14), children: [for (final m in messages) Align(alignment: m['sender'] == 'customer' ? Alignment.centerRight : Alignment.centerLeft, child: Container(constraints: const BoxConstraints(maxWidth: 320), margin: const EdgeInsets.only(bottom: 10), padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: m['sender'] == 'customer' ? Colors.deepPurple.withValues(alpha: .75) : Colors.white.withValues(alpha: .10), borderRadius: BorderRadius.circular(16)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [if (m['sender'] != 'customer') Text(m['sender'] == 'ai' ? 'آنجی · دستیار هوشمند' : m['sender'] == 'admin' ? 'پشتیبانی' : 'سیستم', style: const TextStyle(fontSize: 11, color: Colors.amberAccent)), Text('${m['text'] ?? ''}'), if ((m['attachments'] as List?)?.isNotEmpty ?? false) ...List<Widget>.from((m['attachments'] as List).map((f) => TextButton.icon(onPressed: () => _openAttachment(Map.from(f)), icon: const Icon(Icons.attach_file, size: 16), label: Text('${f['name'] ?? 'پیوست'}', maxLines: 1, overflow: TextOverflow.ellipsis))))])))]))), if (ticketStatus == 'closed') const Padding(padding: EdgeInsets.all(16), child: Text('این تیکت بسته شده است')) else SafeArea(top: false, child: Padding(padding: const EdgeInsets.all(10), child: Row(children: [IconButton(onPressed: busy ? null : _pickAttachment, icon: const Icon(Icons.attach_file), tooltip: 'افزودن فایل، تصویر یا ویدئو'), Expanded(child: TextField(controller: input, minLines: 1, maxLines: 4, decoration: const InputDecoration(hintText: 'پیام خود را بنویسید', border: OutlineInputBorder()))), const SizedBox(width: 8), IconButton.filled(onPressed: busy ? null : _send, icon: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.send))])))])));
+}
+
+class HiddenAdminLogo extends StatefulWidget {
+  const HiddenAdminLogo({super.key, required this.size});
+  final double size;
+  @override
+  State<HiddenAdminLogo> createState() => _HiddenAdminLogoState();
+}
+class _HiddenAdminLogoState extends State<HiddenAdminLogo> {
+  int taps = 0;
+  Timer? reset;
+  void hit() {
+    reset?.cancel();
+    taps++;
+    if (taps >= 5) {
+      taps = 0;
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AdminLoginPage()));
+    } else {
+      reset = Timer(const Duration(seconds: 3), () { if (mounted) setState(() => taps = 0); });
+    }
+  }
+  @override
+  void dispose() { reset?.cancel(); super.dispose(); }
+  @override
+  Widget build(BuildContext context) => GestureDetector(behavior: HitTestBehavior.opaque, onTap: hit, child: AppLogo(size: widget.size, glow: true));
 }
 
 // ===================== ورود / ثبت‌نام =====================
@@ -935,7 +983,7 @@ class _AuthPageState extends State<AuthPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const AppLogo(size: 84),
+                  HiddenAdminLogo(size: 84),
                   const SizedBox(height: 12),
                   const Text(
                     'Angel shop',
