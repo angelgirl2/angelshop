@@ -11,9 +11,11 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 class Cfg {
   // در گیت‌هاب از طریق --dart-define=API_URL تنظیم می‌شود
   static const api = String.fromEnvironment(
-    'API_URL',
-    defaultValue:
-        'https://angel-shop.angelgirl2-bigsister-1383200784.workers.dev',
+    'ANGEL_GIRL__SHOP_API_URL',
+    defaultValue: String.fromEnvironment(
+      'API_URL',
+      defaultValue: 'https://angel-shop.angelgirl2-bigsister-1383200784.workers.dev',
+    ),
   );
   static const rubika = 'https://rubika.ir/angelgirlbrand';
   static const telegram = 'https://t.me/angelgirlbrand';
