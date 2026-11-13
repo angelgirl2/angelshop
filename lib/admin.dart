@@ -215,7 +215,8 @@ class _ProductEditorState extends State<_ProductEditor> {
     try {
       final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: true);
       if (result == null || result.files.isEmpty) return;
-      final file = result.files.first, bytes = result.files.first.bytes;
+      final file = result.files.first;
+      final bytes = file.bytes;
       if (bytes == null || bytes.isEmpty) throw Exception('خواندن تصویر ممکن نشد');
       if (bytes.length > 1500000) throw Exception('حجم تصویر باید کمتر از ۱.۵ مگابایت باشد');
       final ext = file.extension?.toLowerCase() ?? '';
@@ -272,7 +273,8 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
   Widget build(BuildContext context) => loading ? const Center(child: CircularProgressIndicator()) : RefreshIndicator(onRefresh: load, child: orders.isEmpty ? ListView(children: const [SizedBox(height: 150), Center(child: Text('هنوز سفارشی ثبت نشده است'))]) : ListView.builder(
     padding: const EdgeInsets.symmetric(vertical: 8), itemCount: orders.length,
     itemBuilder: (_, i) {
-      final o = orders[i], pending = o['status'] == 'pending';
+      final o = orders[i];
+      final pending = o['status'] == 'pending';
       final lines = (o['items'] as List? ?? const []).map((x) => (x['name'] ?? x['id']).toString() + ' × ' + (x['qty'] ?? '').toString()).join('\n');
       return _adminCard(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [Expanded(child: Text('سفارش ' + (o['code'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.bold))), Text((o['status'] ?? '').toString(), style: TextStyle(color: pending ? Colors.amberAccent : Colors.greenAccent))]),
